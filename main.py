@@ -36,15 +36,20 @@ async def execute_command():
             await send_command(command)
 
 async def send_command(command):
-    channel = bot.get_channel(CHANNEL_ID)
-    if channel:
-        try:
-            await channel.send(f"/{command}")
-            logger.info(f"Sent command: {command}")
-        except Exception as e:
-            logger.error(f"Error sending command {command}: {e}")
-    else:
-        logger.error(f"Channel with ID {CHANNEL_ID} not found")
+    url = f"https://discord.com/api/v9/channels/{CHANNEL_ID}/messages"
+    headers = {
+        "Authorization": f"Bot {TOKEN}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "content": f"/{command}"
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=data) as resp:
+            if resp.status == 200:
+                logger.info(f"Sent command: {command}")
+            else:
+                logger.error(f"Error sending command {command}: {resp.status}")
 
 @bot.event
 async def on_message(message):
