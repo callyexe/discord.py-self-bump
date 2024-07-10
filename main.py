@@ -4,6 +4,7 @@ import aiohttp
 from discord.ext import commands, tasks
 from datetime import datetime, timedelta
 import logging
+import discord
 
 # ロギングの設定
 logging.basicConfig(level=logging.INFO)
@@ -36,13 +37,20 @@ async def execute_command():
             await send_command(command)
 
 async def send_command(command):
-    url = f"https://discord.com/api/v9/channels/{CHANNEL_ID}/messages"
+    url = f"https://discord.com/api/v9/interactions"
     headers = {
         "Authorization": f"Bot {TOKEN}",
         "Content-Type": "application/json"
     }
     data = {
-        "content": f"/{command}"
+        "type": 2,
+        "application_id": bot.user.id,
+        "guild_id": GUILD_ID,
+        "channel_id": CHANNEL_ID,
+        "data": {
+            "name": command,
+            "type": 1
+        }
     }
     async with aiohttp.ClientSession() as session:
         async with session.post(url, headers=headers, json=data) as resp:
