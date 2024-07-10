@@ -12,7 +12,7 @@ GUILD_ID = int(os.getenv('DISCORD_GUILD_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 
 client = discord.Client(intents=intents)
-
+#きんたま
 cooldowns = {
     "dissoku up": timedelta(hours=1),
     "bump": timedelta(hours=2)
