@@ -14,6 +14,12 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD_ID = int(os.getenv('DISCORD_GUILD_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 
+# コマンドIDを定義
+commands_info = {
+    "dissoku up": 828002256690610256,
+    "bump": 947088344167366698
+}
+
 cooldowns = {
     "dissoku up": timedelta(hours=1),
     "bump": timedelta(hours=2)
@@ -21,7 +27,10 @@ cooldowns = {
 
 last_executed = {cmd: datetime.min for cmd in cooldowns}
 
-bot = commands.Bot(command_prefix='!')
+intents = discord.Intents.default()
+intents.message_content = True
+
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 @bot.event
 async def on_ready():
@@ -37,7 +46,8 @@ async def execute_command():
             await send_command(command)
 
 async def send_command(command):
-    url = f"https://discord.com/api/v9/interactions"
+    command_id = commands_info[command]
+    url = "https://discord.com/api/v9/interactions"
     headers = {
         "Authorization": f"Bot {TOKEN}",
         "Content-Type": "application/json"
@@ -48,16 +58,22 @@ async def send_command(command):
         "guild_id": GUILD_ID,
         "channel_id": CHANNEL_ID,
         "data": {
+            "id": str(command_id),
             "name": command,
             "type": 1
         }
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, headers=headers, json=data) as resp:
-            if resp.status == 200:
-                logger.info(f"Sent command: {command}")
-            else:
-                logger.error(f"Error sending command {command}: {resp.status}")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data) as resp:
+                if resp.status == 200:
+                    logger.info(f"Sent command: {command}")
+                else:
+                    logger.error(f"Error sending command {command}: {resp.status}")
+    except aiohttp.ClientError as e:
+        logger.error(f"HTTP request failed: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
 
 @bot.event
 async def on_message(message):
@@ -76,14 +92,25 @@ async def on_message(message):
                     "avatar": str(ref_msg.author.avatar.url),
                     "color": True
                 }
-                async with session.post("https://api.voids.top/quote", json=payload) as resp:
-                    if resp.status == 200:
-                        quote_data = await resp.json()
-                        await message.channel.send(quote_data['url'])
-                    else:
-                        logger.error(f"Error from quote API: {resp.status}")
+                try:
+                    async with session.post("https://api.voids.top/quote", json=payload) as resp:
+                        if resp.status == 200:
+                            quote_data = await resp.json()
+                            await message.channel.send(quote_data['url'])
+                        else:
+                            logger.error(f"Error from quote API: {resp.status}")
+                except aiohttp.ClientError as e:
+                    logger.error(f"HTTP request failed: {e}")
+                except Exception as e:
+                    logger.error(f"Unexpected error when contacting quote API: {e}")
+        except discord.NotFound:
+            logger.error(f"Referenced message not found: {message.reference.message_id}")
+        except discord.Forbidden:
+            logger.error(f"Forbidden to fetch message: {message.reference.message_id}")
+        except discord.HTTPException as e:
+            logger.error(f"HTTP error occurred: {e}")
         except Exception as e:
-            logger.error(f"Error processing 'miaq' command: {e}")
+            logger.error(f"Unexpected error processing 'miaq' command: {e}")
 
     await bot.process_commands(message)
 
