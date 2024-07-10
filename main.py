@@ -63,13 +63,15 @@ async def send_command(command):
             "type": 1
         }
     }
+    logger.info(f"Sending command {command} with ID {command_id}")
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=data) as resp:
+                response_text = await resp.text()
                 if resp.status == 200:
                     logger.info(f"Sent command: {command}")
                 else:
-                    logger.error(f"Error sending command {command}: {resp.status}")
+                    logger.error(f"Error sending command {command}: {resp.status} - {response_text}")
     except aiohttp.ClientError as e:
         logger.error(f"HTTP request failed: {e}")
     except Exception as e:
@@ -94,11 +96,12 @@ async def on_message(message):
                 }
                 try:
                     async with session.post("https://api.voids.top/quote", json=payload) as resp:
+                        response_text = await resp.text()
                         if resp.status == 200:
                             quote_data = await resp.json()
                             await message.channel.send(quote_data['url'])
                         else:
-                            logger.error(f"Error from quote API: {resp.status}")
+                            logger.error(f"Error from quote API: {resp.status} - {response_text}")
                 except aiohttp.ClientError as e:
                     logger.error(f"HTTP request failed: {e}")
                 except Exception as e:
