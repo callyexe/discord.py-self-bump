@@ -23,8 +23,8 @@ CHANNEL_ID = int(CHANNEL_ID)
 
 # コマンドIDを定義
 commands_info = {
-    "dissoku up": 828002256690610256,
-    "bump": 947088344167366698
+    "dissoku up": "828002256690610256",
+    "bump": "947088344167366698"
 }
 
 cooldowns = {
@@ -34,13 +34,12 @@ cooldowns = {
 
 last_executed = {cmd: datetime.min for cmd in cooldowns}
 
-# Intents の部分を削除
-
 bot = commands.Bot(command_prefix='!', self_bot=True)
 
 @bot.event
 async def on_ready():
     logger.info(f'Logged in as {bot.user.name}')
+    bot.http.session_id = bot.http.token.split('.')[0]
     execute_command.start()
 
 @tasks.loop(seconds=60)
@@ -53,15 +52,35 @@ async def execute_command():
 
 async def send_command(command):
     command_id = commands_info[command]
-    channel = bot.get_channel(CHANNEL_ID)
-    if channel:
+    url = "https://discord.com/api/v9/interactions"
+    headers = {
+        "Authorization": TOKEN,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "type": 2,
+        "application_id": command_id,
+        "guild_id": str(GUILD_ID),
+        "channel_id": str(CHANNEL_ID),
+        "session_id": bot.http.session_id,
+        "data": {
+            "version": "1118961510123847772",
+            "id": command_id,
+            "name": command,
+            "type": 1
+        }
+    }
+    
+    async with aiohttp.ClientSession() as session:
         try:
-            await channel.send(f"/{command}")
-            logger.info(f"Sent command: {command}")
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status == 204:
+                    logger.info(f"Successfully sent command: {command}")
+                else:
+                    response_text = await resp.text()
+                    logger.error(f"Error sending command {command}: {resp.status} - {response_text}")
         except Exception as e:
             logger.error(f"Error sending command {command}: {e}")
-    else:
-        logger.error(f"Channel not found for command: {command}")
 
 @bot.event
 async def on_message(message):
