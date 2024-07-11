@@ -5,7 +5,6 @@ from discord.ext import commands, tasks
 from datetime import datetime, timedelta
 import logging
 import discord
-from discord import app_commands
 
 # ロギングの設定
 logging.basicConfig(level=logging.INFO)
@@ -38,20 +37,7 @@ last_executed = {cmd: datetime.min for cmd in cooldowns}
 intents = discord.Intents.default()
 intents.message_content = True
 
-class MyBot(commands.Bot):
-    def __init__(self):
-        super().__init__(command_prefix='!', intents=intents)
-        self.session = None
-
-    async def setup_hook(self):
-        self.session = aiohttp.ClientSession()
-        await self.tree.sync(guild=discord.Object(id=GUILD_ID))
-
-    async def close(self):
-        await self.session.close()
-        await super().close()
-
-bot = MyBot()
+bot = commands.Bot(command_prefix='!', self_bot=True)
 
 @bot.event
 async def on_ready():
@@ -68,59 +54,15 @@ async def execute_command():
 
 async def send_command(command):
     command_id = commands_info[command]
-    url = "https://discord.com/api/v9/interactions"
-    headers = {
-        "Authorization": f"Bot {TOKEN}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "type": 2,
-        "application_id": bot.user.id,
-        "guild_id": GUILD_ID,
-        "channel_id": CHANNEL_ID,
-        "data": {
-            "id": str(command_id),
-            "name": command,
-            "type": 1
-        }
-    }
-    logger.info(f"Sending command {command} with ID {command_id}")
-    try:
-        async with bot.session.post(url, headers=headers, json=data) as resp:
-            response_text = await resp.text()
-            if resp.status == 204:
-                logger.info(f"Sent command: {command}")
-            else:
-                logger.error(f"Error sending command {command}: {resp.status} - {response_text}")
-    except aiohttp.ClientError as e:
-        logger.error(f"HTTP request failed: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-
-@bot.tree.command(name="quote", description="引用画像を生成します", guild=discord.Object(id=GUILD_ID))
-async def quote(interaction: discord.Interaction, message_id: str):
-    try:
-        channel = bot.get_channel(CHANNEL_ID)
-        message = await channel.fetch_message(int(message_id))
-        
-        payload = {
-            "username": message.author.name,
-            "display_name": message.author.display_name,
-            "text": message.content,
-            "avatar": str(message.author.avatar.url),
-            "color": True
-        }
-        
-        async with bot.session.post("https://api.voids.top/quote", json=payload) as resp:
-            if resp.status == 200:
-                quote_data = await resp.json()
-                await interaction.response.send_message(quote_data['url'])
-            else:
-                logger.error(f"Error from quote API: {resp.status}")
-                await interaction.response.send_message("引用画像の生成に失敗しました。", ephemeral=True)
-    except Exception as e:
-        logger.error(f"Error in quote command: {e}")
-        await interaction.response.send_message("エラーが発生しました。", ephemeral=True)
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel:
+        try:
+            await channel.send(f"/{command}")
+            logger.info(f"Sent command: {command}")
+        except Exception as e:
+            logger.error(f"Error sending command {command}: {e}")
+    else:
+        logger.error(f"Channel not found for command: {command}")
 
 @bot.event
 async def on_message(message):
@@ -128,9 +70,33 @@ async def on_message(message):
         return
 
     if message.content.lower() == "miaq" and message.reference:
-        await quote(message, str(message.reference.message_id))
+        await quote(message)
 
     await bot.process_commands(message)
+
+async def quote(message):
+    try:
+        ref_msg = await message.channel.fetch_message(message.reference.message_id)
+        
+        payload = {
+            "username": ref_msg.author.name,
+            "display_name": ref_msg.author.display_name,
+            "text": ref_msg.content,
+            "avatar": str(ref_msg.author.avatar.url if ref_msg.author.avatar else None),
+            "color": True
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post("https://api.voids.top/quote", json=payload) as resp:
+                if resp.status == 200:
+                    quote_data = await resp.json()
+                    await message.channel.send(quote_data['url'])
+                else:
+                    logger.error(f"Error from quote API: {resp.status}")
+                    await message.channel.send("引用画像の生成に失敗しました。")
+    except Exception as e:
+        logger.error(f"Error in quote command: {e}")
+        await message.channel.send("エラーが発生しました。")
 
 if __name__ == "__main__":
     bot.run(TOKEN)
