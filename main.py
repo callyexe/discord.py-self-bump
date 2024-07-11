@@ -34,8 +34,7 @@ cooldowns = {
 
 last_executed = {cmd: datetime.min for cmd in cooldowns}
 
-intents = discord.Intents.default()
-intents.message_content = True
+# Intents の部分を削除
 
 bot = commands.Bot(command_prefix='!', self_bot=True)
 
